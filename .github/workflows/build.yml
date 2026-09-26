@@ -23,16 +23,14 @@ jobs:
 
       - run: flutter create . --platforms=android
 
-      - name: Override compileSdk for all subprojects
+      - name: Override compileSdk for flutter_soloud
         run: |
-          # Добавляем блок в корневой build.gradle.kts, который заставит ВСЕ модули (включая плагины) использовать compileSdk 36
           cat >> android/build.gradle.kts << 'EOF'
 
-          subprojects {
+          project(":flutter_soloud") {
               afterEvaluate {
-                  if (project.extensions.findByName("android") != null) {
-                      val androidExt = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
-                      androidExt.compileSdkVersion(36)
+                  extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {
+                      compileSdkVersion(36)
                   }
               }
           }
