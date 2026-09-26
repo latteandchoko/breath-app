@@ -23,9 +23,20 @@ jobs:
 
       - run: flutter create . --platforms=android
 
-      - name: Set compileSdk to 36
+      - name: Override compileSdk for all subprojects
         run: |
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle.kts
+          # Добавляем блок в корневой build.gradle.kts, который заставит ВСЕ модули (включая плагины) использовать compileSdk 36
+          cat >> android/build.gradle.kts << 'EOF'
+
+          subprojects {
+              afterEvaluate {
+                  if (project.extensions.findByName("android") != null) {
+                      val androidExt = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
+                      androidExt.compileSdkVersion(36)
+                  }
+              }
+          }
+          EOF
 
       - run: flutter pub get
 
