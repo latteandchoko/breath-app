@@ -22,6 +22,12 @@ jobs:
           cache: true
 
       - run: flutter create . --platforms=android
+
+      # Принудительно ставим compileSdk 34
+      - name: Set compileSdk to 34
+        run: |
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
+
       - run: flutter pub get
       - run: flutter build apk --release
 
