@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';  // ← ЭТО БЫЛО ПРОПУЩЕНО
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 class BreathSound {
@@ -54,7 +55,6 @@ class BreathGenerator {
     await stop();
     if (!_inited) await init();
 
-    // Создаём буфер с шумом вручную и загружаем как PCM
     final sampleRate = 22050;
     final totalSamples = (durationSec * sampleRate).round();
     final buffer = Float32List(totalSamples);
@@ -64,16 +64,13 @@ class BreathGenerator {
 
     for (int i = 0; i < totalSamples; i++) {
       final t = i / totalSamples;
-      // Огибающая: вдох — нарастание, выдох — затухание
       final env = rising
           ? sin(t * pi / 2)
           : sin((1 - t) * pi / 2);
 
-      // Белый шум + однополюсный фильтр низких частот
       final white = _random.nextDouble() * 2 - 1;
       lp = lp + cutoff * (white - lp);
 
-      // Лёгкая модуляция для «живости»
       final mod = 0.85 + 0.15 * sin(2 * pi * sound.baseFreq / 40 * t);
 
       buffer[i] = (lp * env * mod * 0.6).clamp(-1.0, 1.0);
@@ -84,7 +81,7 @@ class BreathGenerator {
       _floatToBytes(buffer),
     );
 
-    _handle = _soloud.play(_source!);
+    _handle = await _soloud.play(_source!);  // ← ТЕПЕРЬ С await
   }
 
   Uint8List _floatToBytes(Float32List floats) {
