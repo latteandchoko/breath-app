@@ -83,7 +83,6 @@ class BreathGenerator {
       sampleRate: sampleRate,
       channels: Channels.mono,
       bufferingType: BufferingType.preserved,
-      bufferingTimeNeeds: 0.5,
     );
 
     // Конвертируем Float32List в Uint8List и отправляем в поток
