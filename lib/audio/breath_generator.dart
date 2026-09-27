@@ -79,6 +79,7 @@ class BreathGenerator {
     _source = await _soloud.loadMem(
       'breath_${sound.name}_${rising ? "in" : "out"}_${DateTime.now().microsecondsSinceEpoch}',
       _floatToBytes(buffer),
+      mode: LoadMode.memory,
     );
 
     _handle = await _soloud.play(_source!);  // ← ТЕПЕРЬ С await
