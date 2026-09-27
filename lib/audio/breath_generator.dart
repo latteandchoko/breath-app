@@ -1,33 +1,29 @@
 import 'dart:async';
-import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 class BreathSound {
   final String name;
+  final WaveForm waveform;
   final double baseFreq;
-  final bool isNoise;
-  final double noiseCutoff;
 
   const BreathSound({
     required this.name,
+    required this.waveform,
     required this.baseFreq,
-    this.isNoise = true,
-    this.noiseCutoff = 0.5,
   });
 }
 
 const List<BreathSound> breathSounds = [
-  BreathSound(name: 'Мягкий ветер', baseFreq: 180, noiseCutoff: 0.4),
-  BreathSound(name: 'Глубокий океан', baseFreq: 90, noiseCutoff: 0.2),
-  BreathSound(name: 'Ночной лес', baseFreq: 220, noiseCutoff: 0.5),
-  BreathSound(name: 'Тёплый туман', baseFreq: 140, noiseCutoff: 0.3),
-  BreathSound(name: 'Шёпот', baseFreq: 320, noiseCutoff: 0.7),
-  BreathSound(name: 'Горный ручей', baseFreq: 260, noiseCutoff: 0.6),
-  BreathSound(name: 'Далёкий прибой', baseFreq: 70, noiseCutoff: 0.15),
-  BreathSound(name: 'Утренний бриз', baseFreq: 200, noiseCutoff: 0.45),
-  BreathSound(name: 'Пещера', baseFreq: 60, noiseCutoff: 0.1),
-  BreathSound(name: 'Дождь', baseFreq: 380, noiseCutoff: 0.8),
+  BreathSound(name: 'Мягкий ветер', waveform: WaveForm.sin, baseFreq: 180),
+  BreathSound(name: 'Глубокий океан', waveform: WaveForm.fSaw, baseFreq: 90),
+  BreathSound(name: 'Ночной лес', waveform: WaveForm.triangle, baseFreq: 220),
+  BreathSound(name: 'Тёплый туман', waveform: WaveForm.sin, baseFreq: 140),
+  BreathSound(name: 'Шёпот', waveform: WaveForm.fSquare, baseFreq: 320),
+  BreathSound(name: 'Горный ручей', waveform: WaveForm.saw, baseFreq: 260),
+  BreathSound(name: 'Далёкий прибой', waveform: WaveForm.fSaw, baseFreq: 70),
+  BreathSound(name: 'Утренний бриз', waveform: WaveForm.sin, baseFreq: 200),
+  BreathSound(name: 'Пещера', waveform: WaveForm.triangle, baseFreq: 60),
+  BreathSound(name: 'Дождь', waveform: WaveForm.square, baseFreq: 380),
 ];
 
 class BreathGenerator {
@@ -35,7 +31,6 @@ class BreathGenerator {
   AudioSource? _source;
   SoundHandle? _handle;
   bool _inited = false;
-  final Random _random = Random();
 
   Future<void> init() async {
     if (_inited) return;
@@ -55,47 +50,35 @@ class BreathGenerator {
     await stop();
     if (!_inited) await init();
 
-    final sampleRate = 22050;
-    final totalSamples = (durationSec * sampleRate).round();
-    final buffer = Float32List(totalSamples);
-
-    double lp = 0.0;
-    final cutoff = sound.noiseCutoff.clamp(0.02, 0.95);
-
-    for (int i = 0; i < totalSamples; i++) {
-      final t = i / totalSamples;
-      final env = rising
-          ? sin(t * pi / 2)
-          : sin((1 - t) * pi / 2);
-
-      final white = _random.nextDouble() * 2 - 1;
-      lp = lp + cutoff * (white - lp);
-
-      final mod = 0.85 + 0.15 * sin(2 * pi * sound.baseFreq / 40 * t);
-
-      buffer[i] = (lp * env * mod * 0.6).clamp(-1.0, 1.0);
-    }
-
-    // Создаём поток с явным указанием формата PCM
-    _source = _soloud.setBufferStream(
-      maxBufferSizeBytes: buffer.length * 4,
-      format: BufferType.f32le,
-      sampleRate: sampleRate,
-      channels: Channels.mono,
-      bufferingType: BufferingType.preserved,
+    // Создаём осциллятор с нужной формой волны
+    _source = await _soloud.loadWaveform(
+      sound.waveform,
+      false, // superWave
+      1.0,   // scale
+      0.0,   // detune
     );
 
-    // Конвертируем Float32List в Uint8List и отправляем в поток
-    _soloud.addAudioDataStream(
-      _source!,
-      buffer.buffer.asUint8List(),
-    );
-
-    // Сигнализируем, что данные закончились
-    _soloud.setDataIsEnded(_source!);
+    // Устанавливаем частоту
+    _soloud.setWaveformFreq(_source!, sound.baseFreq);
 
     // Воспроизводим
     _handle = await _soloud.play(_source!);
+
+    // Плавно меняем громкость:
+    // Вдох — нарастание (fade in)
+    // Выдох — затухание (fade out)
+    if (rising) {
+      _soloud.fadeVolume(_handle!, 0.0, 0.0); // мгновенно в 0
+      _soloud.fadeVolume(_handle!, 0.6, durationSec * 0.8); // плавно к 0.6
+    } else {
+      _soloud.fadeVolume(_handle!, 0.6, 0.0); // начинаем с 0.6
+      _soloud.fadeVolume(_handle!, 0.0, durationSec * 0.8); // плавно к 0
+    }
+
+    // Останавливаем через durationSec
+    Future.delayed(Duration(milliseconds: (durationSec * 1000).round()), () {
+      stop();
+    });
   }
 
   Future<void> stop() async {
