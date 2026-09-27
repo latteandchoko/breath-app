@@ -31,6 +31,7 @@ class BreathGenerator {
   AudioSource? _source;
   SoundHandle? _handle;
   bool _inited = false;
+  Timer? _stopTimer;
 
   Future<void> init() async {
     if (_inited) return;
@@ -50,7 +51,7 @@ class BreathGenerator {
     await stop();
     if (!_inited) await init();
 
-    // Создаём осциллятор с нужной формой волны
+    // loadWaveform возвращает Future<AudioSource>, нужно await [citation:1]
     _source = await _soloud.loadWaveform(
       sound.waveform,
       false, // superWave
@@ -58,30 +59,34 @@ class BreathGenerator {
       0.0,   // detune
     );
 
-    // Устанавливаем частоту
+    // setWaveformFreq принимает AudioSource (не handle) [citation:2]
     _soloud.setWaveformFreq(_source!, sound.baseFreq);
 
-    // Воспроизводим
+    // play возвращает Future<SoundHandle> в 4.x
     _handle = await _soloud.play(_source!);
 
-    // Плавно меняем громкость:
-    // Вдох — нарастание (fade in)
-    // Выдох — затухание (fade out)
+    // fadeVolume принимает handle, конечную громкость и Duration [citation:3]
+    final fadeTime = Duration(milliseconds: (durationSec * 800).round());
+
     if (rising) {
-      _soloud.fadeVolume(_handle!, 0.0, 0.0); // мгновенно в 0
-      _soloud.fadeVolume(_handle!, 0.6, durationSec * 0.8); // плавно к 0.6
+      _soloud.fadeVolume(_handle!, 0.6, fadeTime); // нарастание
     } else {
-      _soloud.fadeVolume(_handle!, 0.6, 0.0); // начинаем с 0.6
-      _soloud.fadeVolume(_handle!, 0.0, durationSec * 0.8); // плавно к 0
+      _soloud.fadeVolume(_handle!, 0.6, Duration.zero); // сразу на 0.6
+      _soloud.fadeVolume(_handle!, 0.0, fadeTime);      // затухание
     }
 
     // Останавливаем через durationSec
-    Future.delayed(Duration(milliseconds: (durationSec * 1000).round()), () {
-      stop();
-    });
+    _stopTimer?.cancel();
+    _stopTimer = Timer(
+      Duration(milliseconds: (durationSec * 1000).round()),
+      () => stop(),
+    );
   }
 
   Future<void> stop() async {
+    _stopTimer?.cancel();
+    _stopTimer = null;
+
     if (_handle != null) {
       await _soloud.stop(_handle!);
       _handle = null;
