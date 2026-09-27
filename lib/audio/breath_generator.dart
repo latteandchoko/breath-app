@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:typed_data';  // ← ЭТО БЫЛО ПРОПУЩЕНО
+import 'dart:typed_data';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 class BreathSound {
@@ -76,22 +76,27 @@ class BreathGenerator {
       buffer[i] = (lp * env * mod * 0.6).clamp(-1.0, 1.0);
     }
 
-    _source = await _soloud.loadMem(
-      'breath_${sound.name}_${rising ? "in" : "out"}_${DateTime.now().microsecondsSinceEpoch}',
-      _floatToBytes(buffer),
-      mode: LoadMode.memory,
+    // Создаём поток с явным указанием формата PCM
+    _source = _soloud.setBufferStream(
+      maxBufferSizeBytes: buffer.length * 4,
+      format: BufferType.f32le,
+      sampleRate: sampleRate,
+      channels: Channels.mono,
+      bufferingType: BufferingType.preserved,
+      bufferingTimeNeeds: 0.5,
     );
 
-    _handle = await _soloud.play(_source!);  // ← ТЕПЕРЬ С await
-  }
+    // Конвертируем Float32List в Uint8List и отправляем в поток
+    _soloud.addAudioDataStream(
+      _source!,
+      buffer.buffer.asUint8List(),
+    );
 
-  Uint8List _floatToBytes(Float32List floats) {
-    final bytes = Uint8List(floats.length * 4);
-    final view = ByteData.view(bytes.buffer);
-    for (int i = 0; i < floats.length; i++) {
-      view.setFloat32(i * 4, floats[i], Endian.little);
-    }
-    return bytes;
+    // Сигнализируем, что данные закончились
+    _soloud.setDataIsEnded(_source!);
+
+    // Воспроизводим
+    _handle = await _soloud.play(_source!);
   }
 
   Future<void> stop() async {
